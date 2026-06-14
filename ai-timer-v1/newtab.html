@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="dark">
+<head>
+  <meta charset="UTF-8"/>
+  <title>New Tab</title>
+  <link rel="stylesheet" href="newtab.css"/>
+</head>
+<body>
+  <div id="bg-photo"></div>
+  <canvas id="bg-canvas"></canvas>
+  <div id="bg-overlay"></div>
+  <div id="noise"></div>
+
+  <!-- エンジンメニュー：body直下・完全独立 -->
+  <div id="engine-menu">
+    <div class="eng-group">検索エンジン</div>
+    <div class="eng-item" data-e="google"     data-url="https://www.google.com/search?q="      data-icon="G"  data-color="#4285f4">Google</div>
+    <div class="eng-item" data-e="bing"       data-url="https://www.bing.com/search?q="        data-icon="b"  data-color="#00809d">Bing</div>
+    <div class="eng-item" data-e="ddg"        data-url="https://duckduckgo.com/?q="            data-icon="D"  data-color="#de5833">DuckDuckGo</div>
+    <div class="eng-item" data-e="yahoo"      data-url="https://search.yahoo.co.jp/search?p="  data-icon="Y!" data-color="#ff0033">Yahoo! Japan</div>
+    <div class="eng-item" data-e="brave"      data-url="https://search.brave.com/search?q="    data-icon="🦁" data-color="#fb542b">Brave</div>
+    <div class="eng-group">AI検索</div>
+    <div class="eng-item" data-e="perplexity" data-url="https://www.perplexity.ai/search?q="   data-icon="⊕" data-color="#a855f7">Perplexity</div>
+    <div class="eng-item" data-e="chatgpt"    data-url="https://chatgpt.com/?q="               data-icon="✦" data-color="#10a37f">ChatGPT</div>
+    <div class="eng-item" data-e="gemini"     data-url="https://gemini.google.com/search?q="   data-icon="✸" data-color="#4285f4">Gemini</div>
+    <div class="eng-item" data-e="google_ai"  data-url="https://www.google.com/search?udm=50&q=" data-icon="✧" data-color="#ea4335">Google AI</div>
+  </div>
+
+  <div id="page">
+    <div id="toolbar">
+      <div id="ai-nav"></div>
+      <div id="toolbar-right">
+        <button id="settings-btn" title="設定">⚙</button>
+      </div>
+    </div>
+
+    <main id="hero">
+      <div id="clock">00:00</div>
+      <div id="greeting"></div>
+      <div id="dateline"></div>
+      <div id="search-wrap">
+        <button id="engine-btn"><span id="engine-icon">G</span></button>
+        <input id="search-input" type="text" placeholder="検索またはURLを入力..." autocomplete="off" spellcheck="false"/>
+        <button id="search-go">→</button>
+      </div>
+    </main>
+
+    <section id="tracker">
+      <div id="tracker-head">
+        <span id="tracker-label">Screen Time</span>
+        <div id="tracker-tabs">
+          <button class="ttab active" data-p="today">今日</button>
+          <button class="ttab" data-p="week">今週</button>
+          <button class="ttab" data-p="month">今月</button>
+        </div>
+      </div>
+      <div id="tracker-body">
+        <div id="donut-wrap">
+          <canvas id="donut" width="110" height="110"></canvas>
+          <div id="donut-center">
+            <div id="donut-total">--</div>
+            <div id="donut-sub">合計</div>
+          </div>
+        </div>
+        <div id="bars"></div>
+      </div>
+    </section>
+  </div>
+
+  <div id="photo-credit"></div>
+
+  <!-- 設定パネル -->
+  <div id="sp-overlay"></div>
+  <aside id="sp">
+    <div id="sp-head"><span>カスタマイズ</span><button id="sp-close">✕</button></div>
+    <div id="sp-body">
+
+      <div class="sps">
+        <div class="spl">テーマ</div>
+        <div class="sp-row">
+          <button class="tbtn" data-theme="dark">ダーク</button>
+          <button class="tbtn" data-theme="light">ライト</button>
+          <button class="tbtn" data-theme="midnight">ミッドナイト</button>
+        </div>
+      </div>
+
+      <div class="sps">
+        <div class="spl">背景スタイル</div>
+        <div class="sp-row">
+          <button class="bsbtn" data-bg="photo">風景写真</button>
+          <button class="bsbtn" data-bg="orbs">オーブ</button>
+          <button class="bsbtn" data-bg="mesh">メッシュ</button>
+          <button class="bsbtn" data-bg="plain">無地</button>
+        </div>
+      </div>
+
+      <div class="sps" id="photo-options">
+        <div class="spl">写真の更新タイミング</div>
+        <div class="sp-row">
+          <button class="ptbtn" data-pt="newtab">タブを開くたび</button>
+          <button class="ptbtn" data-pt="hourly">1時間ごと</button>
+          <button class="ptbtn" data-pt="manual">手動のみ</button>
+        </div>
+        <button id="refresh-photo">📷 今すぐ変える</button>
+      </div>
+
+      <div class="sps">
+        <div class="spl">テキストカスタマイズ</div>
+        <div class="sp-text-grid">
+          <div class="sp-slider-row">
+            <span class="spl-sub">文字の明るさ</span>
+            <div class="slider-wrap">
+              <input type="range" id="sl-brightness" min="30" max="100" step="5"/>
+              <span class="sl-val" id="sl-brightness-val">100%</span>
+            </div>
+          </div>
+          <div class="sp-slider-row">
+            <span class="spl-sub">挨拶・日付の透明度</span>
+            <div class="slider-wrap">
+              <input type="range" id="sl-sub-opacity" min="10" max="80" step="5"/>
+              <span class="sl-val" id="sl-sub-opacity-val">44%</span>
+            </div>
+          </div>
+          <div class="sp-slider-row">
+            <span class="spl-sub">時計の太さ</span>
+            <div class="slider-wrap">
+              <input type="range" id="sl-clock-weight" min="100" max="700" step="100"/>
+              <span class="sl-val" id="sl-clock-weight-val">200</span>
+            </div>
+          </div>
+          <div class="sp-slider-row">
+            <span class="spl-sub">背景オーバーレイ濃度</span>
+            <div class="slider-wrap">
+              <input type="range" id="sl-overlay" min="0" max="80" step="5"/>
+              <span class="sl-val" id="sl-overlay-val">45%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sps">
+        <div class="spl">名前（挨拶に表示）</div>
+        <input id="name-input" type="text" placeholder="あなたの名前" maxlength="20"/>
+      </div>
+
+      <div class="sps">
+        <div class="spl">機能 オン/オフ</div>
+        <div class="sp-toggles">
+          <label class="tog"><span>検索バー</span><input type="checkbox" id="t-search"/><span class="tslider"></span></label>
+          <label class="tog"><span>AIクイックリンク</span><input type="checkbox" id="t-nav"/><span class="tslider"></span></label>
+          <label class="tog"><span>Screen Timeトラッカー</span><input type="checkbox" id="t-tracker"/><span class="tslider"></span></label>
+          <label class="tog"><span>時刻・日付</span><input type="checkbox" id="t-clock"/><span class="tslider"></span></label>
+        </div>
+      </div>
+
+      <div class="sps">
+        <div class="spl">サービス設定</div>
+        <div class="spl-sub">ホームに表示 / 計測する</div>
+        <div id="svc-settings"></div>
+      </div>
+
+      <div class="sps">
+        <div class="spl">クイックリンク 並べ替え</div>
+        <div class="spl-sub">ドラッグして順番を変更</div>
+        <div id="sort-list"></div>
+      </div>
+
+    </div>
+  </aside>
+
+  <script src="newtab.js"></script>
+</body>
+</html>

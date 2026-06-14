@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8"/>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{width:230px;background:#090909;color:#f0f0f0;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;-webkit-font-smoothing:antialiased}
+    .wrap{padding:13px;display:flex;flex-direction:column;gap:10px}
+    .hdr{display:flex;align-items:center;justify-content:space-between}
+    .ttl{font-size:12px;font-weight:700}
+    .dbtn{background:none;border:1px solid #222;color:#666;font-size:10px;padding:4px 10px;border-radius:6px;cursor:pointer;font-family:inherit;transition:all .15s}
+    .dbtn:hover{color:#ddd;border-color:#444}
+    .tabs{display:flex;gap:3px}
+    .tab{flex:1;background:#141414;border:1px solid #1e1e1e;color:#555;font-size:10px;font-weight:600;padding:5px 0;border-radius:7px;cursor:pointer;font-family:inherit;transition:all .15s}
+    .tab.on{background:#1c1c1c;color:#e0e0e0;border-color:#2e2e2e}
+    .list{display:flex;flex-direction:column;gap:5px}
+    .row{display:flex;align-items:center;gap:7px}
+    .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+    .nm{font-size:11px;color:#999;flex:1}
+    .tm{font-size:12px;font-weight:700;font-variant-numeric:tabular-nums}
+    .sep{height:1px;background:#181818}
+    .tot{display:flex;justify-content:space-between;align-items:baseline}
+    .tl{font-size:10px;color:#444}
+    .tv{font-size:16px;font-weight:800;font-variant-numeric:tabular-nums}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hdr">
+      <span class="ttl">📊 AI Screen Time</span>
+      <button class="dbtn" id="db">ホーム →</button>
+    </div>
+    <div class="tabs">
+      <button class="tab on" data-p="today">今日</button>
+      <button class="tab" data-p="week">今週</button>
+      <button class="tab" data-p="month">今月</button>
+    </div>
+    <div class="list" id="list"></div>
+    <div class="sep"></div>
+    <div class="tot"><span class="tl">合計</span><span class="tv" id="tot">--</span></div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
