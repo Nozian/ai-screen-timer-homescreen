@@ -43,26 +43,70 @@
         <input id="search-input" type="text" placeholder="検索またはURLを入力..." autocomplete="off" spellcheck="false"/>
         <button id="search-go">→</button>
       </div>
+
+      <div id="scroll-cue">
+        <span>SCREEN TIME</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+      </div>
     </main>
 
     <section id="tracker">
       <div id="tracker-head">
         <span id="tracker-label">Screen Time</span>
+        <div id="pnav">
+          <button id="pn-prev" title="前の期間">‹</button>
+          <span id="pn-label">今日</span>
+          <button id="pn-next" title="次の期間">›</button>
+        </div>
         <div id="tracker-tabs">
-          <button class="ttab active" data-p="today">今日</button>
-          <button class="ttab" data-p="week">今週</button>
-          <button class="ttab" data-p="month">今月</button>
+          <button class="ttab active" data-p="today">日</button>
+          <button class="ttab" data-p="week">週</button>
+          <button class="ttab" data-p="month">月</button>
         </div>
       </div>
       <div id="tracker-body">
         <div id="donut-wrap">
-          <canvas id="donut" width="110" height="110"></canvas>
+          <canvas id="donut"></canvas>
           <div id="donut-center">
             <div id="donut-total">--</div>
             <div id="donut-sub">合計</div>
           </div>
         </div>
         <div id="bars"></div>
+      </div>
+
+      <div id="chart-section">
+        <div id="chart-head">
+          <span id="chart-title">時間帯別</span>
+          <span id="chart-meta"></span>
+        </div>
+        <div id="chart-plot">
+          <div id="avg-line"><span id="avg-label"></span></div>
+          <div id="cols"></div>
+          <div id="chart-tip"></div>
+        </div>
+        <div id="cat-legend"></div>
+        <div id="session-stats"></div>
+      </div>
+    </section>
+
+    <section id="heatmap-section">
+      <div id="heatmap-head">
+        <span id="heatmap-title">年間アクティビティ</span>
+        <span id="heatmap-meta"></span>
+      </div>
+      <div id="heatmap-scroll">
+        <div id="heatmap-months"></div>
+        <div id="heatmap-grid"></div>
+      </div>
+      <div id="heatmap-legend">
+        <span>少</span>
+        <span class="hm-sq" data-lv="0"></span>
+        <span class="hm-sq" data-lv="1"></span>
+        <span class="hm-sq" data-lv="2"></span>
+        <span class="hm-sq" data-lv="3"></span>
+        <span class="hm-sq" data-lv="4"></span>
+        <span>多</span>
       </div>
     </section>
   </div>
@@ -82,6 +126,15 @@
           <button class="tbtn" data-theme="light">ライト</button>
           <button class="tbtn" data-theme="midnight">ミッドナイト</button>
         </div>
+      </div>
+
+      <div class="sps">
+        <div class="spl">レイアウト</div>
+        <div class="sp-row">
+          <button class="lmbtn" data-lm="scroll">スクロール</button>
+          <button class="lmbtn" data-lm="compact">まとめて表示</button>
+        </div>
+        <div class="spl-sub" id="lm-hint">壁紙を全画面で楽しみ、下にスクロールで記録を見る</div>
       </div>
 
       <div class="sps">
@@ -149,6 +202,7 @@
           <label class="tog"><span>検索バー</span><input type="checkbox" id="t-search"/><span class="tslider"></span></label>
           <label class="tog"><span>AIクイックリンク</span><input type="checkbox" id="t-nav"/><span class="tslider"></span></label>
           <label class="tog"><span>Screen Timeトラッカー</span><input type="checkbox" id="t-tracker"/><span class="tslider"></span></label>
+          <label class="tog"><span>年間アクティビティ</span><input type="checkbox" id="t-heatmap"/><span class="tslider"></span></label>
           <label class="tog"><span>時刻・日付</span><input type="checkbox" id="t-clock"/><span class="tslider"></span></label>
         </div>
       </div>
@@ -163,6 +217,15 @@
         <div class="spl">クイックリンク 並べ替え</div>
         <div class="spl-sub">ドラッグして順番を変更</div>
         <div id="sort-list"></div>
+      </div>
+
+      <div class="sps">
+        <div class="spl">データ管理</div>
+        <div class="spl-sub">計測データを手元に保存する</div>
+        <div class="sp-row">
+          <button id="export-json" class="ptbtn">⇩ JSON</button>
+          <button id="export-csv" class="ptbtn">⇩ CSV（日別）</button>
+        </div>
       </div>
 
     </div>

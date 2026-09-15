@@ -18,7 +18,8 @@ const DAYS = ["日","月","火","水","木","金","土"];
 // ━━━ デフォルト設定 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 const DEFAULTS = {
   theme:"dark", bgStyle:"photo", userName:"",
-  showSearch:true, showNav:true, showTracker:true, showClock:true,
+  showSearch:true, showNav:true, showTracker:true, showClock:true, showHeatmap:true,
+  layoutMode:"scroll",    // "scroll"（壁紙優先・下にスクロール） | "compact"（1画面にまとめて表示）
   searchEngine:"google",
   chipOrder:[...DEFAULT_ORDER],
   hiddenIds:[], trackingOff:[],
@@ -289,8 +290,23 @@ function initEngine(){
 }
 function openEngineMenu(){
   const r=engineBtn.getBoundingClientRect();
-  engineMenu.style.top=(r.bottom+8)+"px"; engineMenu.style.left=r.left+"px";
-  engineMenu.classList.add("open"); engineMenuOpen=true;
+  engineMenu.classList.add("open"); engineMenuOpen=true;   // 先に表示して実寸を測る
+  const vw=window.innerWidth, vh=window.innerHeight;
+  engineMenu.style.maxHeight=Math.min(320, vh-16)+"px";
+  const menuH=engineMenu.offsetHeight, menuW=engineMenu.offsetWidth;
+  const spaceBelow=vh-r.bottom-8, spaceAbove=r.top-8;
+
+  // 下に十分な余白が無ければ上向きに開く
+  if(spaceBelow<menuH && spaceAbove>spaceBelow){
+    engineMenu.style.top="auto";
+    engineMenu.style.bottom=(vh-r.top+8)+"px";
+  } else {
+    engineMenu.style.bottom="auto";
+    engineMenu.style.top=(r.bottom+8)+"px";
+  }
+  // 画面外にはみ出さないよう左位置もクランプ
+  const left=Math.min(Math.max(8,r.left), vw-menuW-8);
+  engineMenu.style.left=left+"px";
 }
 function closeEngineMenu(){ engineMenu.classList.remove("open"); engineMenuOpen=false; }
 
@@ -313,69 +329,508 @@ document.getElementById("search-go").addEventListener("click",doSearch);
 document.getElementById("search-input").addEventListener("keydown",e=>{if(e.key==="Enter")doSearch();});
 
 // ━━━ トラッカー ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-let period="today", rawData=null;
+let period="today", rawData=null, stats=null, offset=0;
+const OFFSET_MIN = { today:-13, week:-8, month:-2 };
+function addDays(d,n){ return new Date(d.getFullYear(),d.getMonth(),d.getDate()+n); }
+function sameD(a,b){ return a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate(); }
+function dkey(d){ return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`; }
+
+// 現在の period + offset が指す日付範囲
+function currentRange(){
+  const now=stats?stats.now:{y:new Date().getFullYear(),m:new Date().getMonth()+1,d:new Date().getDate()};
+  const today=new Date(now.y,now.m-1,now.d);
+  if(period==="today"){
+    const d=addDays(today,offset);
+    return {from:d,to:d,fullFrom:d,fullTo:d};
+  }
+  if(period==="week"){
+    const mon=addDays(mondayOfLocal(today),offset*7);
+    return {from:mon,to:offset===0?today:addDays(mon,6),fullFrom:mon,fullTo:addDays(mon,6)};
+  }
+  const first=new Date(now.y,now.m-1+offset,1);
+  const last=new Date(first.getFullYear(),first.getMonth()+1,0);
+  return {from:first,to:offset===0?today:last,fullFrom:first,fullTo:last};
+}
+function periodLabel(){
+  const r=currentRange();
+  if(period==="today"){
+    if(offset===0) return "今日";
+    if(offset===-1) return "昨日";
+    return `${r.from.getMonth()+1}/${r.from.getDate()}（${DOW_JA[r.from.getDay()===0?6:r.from.getDay()-1]}）`;
+  }
+  if(period==="week"){
+    if(offset===0) return "今週";
+    if(offset===-1) return "先週";
+    return `${-offset}週間前`;
+  }
+  if(offset===0) return "今月";
+  if(offset===-1) return "先月";
+  return `${r.from.getMonth()+1}月`;
+}
+function updatePnav(){
+  document.getElementById("pn-label").textContent=periodLabel();
+  document.getElementById("pn-prev").disabled = offset<=OFFSET_MIN[period];
+  document.getElementById("pn-next").disabled = offset>=0;
+}
+
+// カテゴリ定義（全グラフ共通の色）
+const CATEGORIES = [
+  { id:"chat",   name:"対話AI", color:"#5E5CE6", ids:["chatgpt","claude","gemini","grok"] },
+  { id:"search", name:"検索AI", color:"#0A84FF", ids:["perplexity","google_ai"]           },
+  { id:"other",  name:"その他", color:"#FF9F0A", ids:["google","twitter","youtube"]       },
+];
+const CAT_OF = {};
+CATEGORIES.forEach(c => c.ids.forEach(id => CAT_OF[id] = c));
+
+const BAR_H = 78, LABEL_H = 14;   // フォールバック値
+let lastAvgRatio = null, chartHover = false;
+function positionAvgLine(ratio){
+  const colsEl=document.getElementById("cols");
+  const bar=colsEl.querySelector(".col-bar"), lbl=colsEl.querySelector(".col-lbl");
+  const bh=bar?bar.clientHeight:BAR_H, lh=lbl?lbl.clientHeight:LABEL_H;
+  document.getElementById("avg-line").style.bottom=(lh+Math.min(1,ratio)*bh)+"px";
+}
+window.addEventListener("resize",()=>{ if(lastAvgRatio!=null) positionAvgLine(lastAvgRatio); });
+const DOW_JA = ["月","火","水","木","金","土","日"];
+
 function fmtShort(sec){
   if(!sec) return "0m";
   const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60);
   if(h>0) return `${h}h${m}m`; if(m>0) return `${m}m`; return `${sec}s`;
 }
+function svcOf(id){ return SERVICES.find(x=>x.id===id); }
+function mondayOfLocal(d){
+  const x=new Date(d.getFullYear(),d.getMonth(),d.getDate());
+  x.setDate(x.getDate()-(x.getDay()===0?6:x.getDay()-1));
+  return x;
+}
+
 function loadTracker(){
   chrome.runtime.sendMessage({type:"GET_ALL"},res=>{if(!res)return;rawData=res.services;renderTracker();});
 }
+function loadStats(){
+  chrome.runtime.sendMessage({type:"GET_STATS"},res=>{if(!res)return;stats=res;renderChart();});
+}
+function loadYear(){
+  chrome.runtime.sendMessage({type:"GET_YEAR"},res=>{if(res)renderHeatmap(res);});
+}
+
+// ── セッション統計（選択中の期間に連動） ──
+function renderSessionStats(){
+  const el=document.getElementById("session-stats");
+  if(!stats){ el.innerHTML=""; return; }
+  const hidden=new Set(P.hiddenIds||[]);
+  const r=currentRange();
+
+  let count=0, sumSec=0, maxSec=0;
+  stats.daily.forEach(rec=>{
+    const dt=new Date(rec.y,rec.m-1,rec.d);
+    if(dt<r.from||dt>r.to) return;
+    Object.keys(rec.sessions||{}).forEach(sid=>{
+      if(hidden.has(sid)) return;
+      const se=rec.sessions[sid];
+      count+=se.count; maxSec=Math.max(maxSec,se.maxSec);
+    });
+    Object.keys(rec.services||{}).forEach(sid=>{ if(!hidden.has(sid)) sumSec+=rec.services[sid]; });
+  });
+
+  if(!count){ el.innerHTML=""; return; }
+  const avg=Math.round(sumSec/count);
+  el.innerHTML=`
+    <span class="ss-item">回数 <span class="ss-v">${count}回</span></span>
+    <span class="ss-item">平均 <span class="ss-v">${fmtShort(avg)}</span></span>
+    <span class="ss-item">最長 <span class="ss-v">${fmtShort(maxSec)}</span></span>
+  `;
+}
+
+// ── 年間ヒートマップ ──
+const HM_MONTH_JA=["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
+function renderHeatmap(data){
+  const grid=document.getElementById("heatmap-grid");
+  const monthsEl=document.getElementById("heatmap-months");
+  const metaEl=document.getElementById("heatmap-meta");
+  const cells=data.cells;
+  if(!cells||!cells.length){ grid.innerHTML=""; return; }
+
+  const max=Math.max(...cells.map(c=>c.total),1);
+  const activeDays=cells.filter(c=>c.total>0).length;
+  const totalSec=cells.reduce((s,c)=>s+c.total,0);
+  metaEl.textContent=`過去1年 ${fmtShort(totalSec)} ・ ${activeDays}日 使用`;
+
+  const lvOf=sec=>{
+    if(!sec) return 0;
+    const r=sec/max;
+    if(r>0.75) return 4; if(r>0.5) return 3; if(r>0.22) return 2; return 1;
+  };
+
+  grid.innerHTML="";
+  const weeks=Math.ceil(cells.length/7);
+  grid.style.gridTemplateColumns=`repeat(${weeks}, 9px)`;   // .hm-cellの実寸(9px)と完全一致させる
+  cells.forEach((c,i)=>{
+    const dt=new Date(c.y,c.m-1,c.d);
+    const isFuture = i>data.todayIdx;
+    const div=document.createElement("div");
+    div.className="hm-cell"+(isFuture?" future":"")+(i===data.todayIdx?" today":"");
+    if(!isFuture){
+      const lv=lvOf(c.total);
+      div.dataset.lv=lv;
+      div.style.background = lv===0 ? "var(--bar-bg)" : `var(--hm${lv})`;
+      div.title=`${c.m}/${c.d}：${fmtShort(c.total)}`;
+    }
+    grid.appendChild(div);
+  });
+
+  // 月ラベル：グリッドと同じ列定義を使い、grid-column-startで実際の列に直接固定する
+  monthsEl.innerHTML="";
+  monthsEl.style.gridTemplateColumns=`repeat(${weeks}, 9px)`;
+  monthsEl.style.columnGap="3px";
+  let lastMonth=-1;
+  cells.forEach((c,i)=>{
+    const week=Math.floor(i/7);
+    if(c.m!==lastMonth && c.d<=7){
+      lastMonth=c.m;
+      const s=document.createElement("span");
+      s.className="hm-month";
+      s.textContent=HM_MONTH_JA[c.m-1];
+      s.style.gridColumnStart=week+1;
+      monthsEl.appendChild(s);
+    }
+  });
+}
+
+// ── データエクスポート ──
+function downloadBlob(content, filename, mime){
+  const blob=new Blob([content],{type:mime});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url; a.download=filename; document.body.appendChild(a); a.click();
+  a.remove(); setTimeout(()=>URL.revokeObjectURL(url), 2000);
+}
+function todayStr(){ const d=new Date(); return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}`; }
+function exportJSON(){
+  chrome.runtime.sendMessage({type:"GET_EXPORT"},res=>{
+    if(!res) return;
+    downloadBlob(JSON.stringify(res,null,2), `ai-screen-time_${todayStr()}.json`, "application/json");
+  });
+}
+function exportCSV(){
+  chrome.runtime.sendMessage({type:"GET_YEAR"},yr=>{
+    chrome.runtime.sendMessage({type:"GET_EXPORT"},ex=>{
+      if(!ex) return;
+      const raw=ex.raw;
+      const dateSet=new Set();
+      Object.keys(raw).forEach(k=>{
+        const m=k.match(/^([a-z_]+)_d_(\d+)_(\d+)_(\d+)$/);
+        if(m) dateSet.add(`${m[2]}-${String(m[3]).padStart(2,"0")}-${String(m[4]).padStart(2,"0")}`);
+      });
+      const dates=[...dateSet].sort();
+      const ids=SERVICES.map(s=>s.id);
+      const rows=[["date",...ids,"total"].join(",")];
+      dates.forEach(ds=>{
+        const [y,m,d]=ds.split("-").map(Number);
+        let total=0;
+        const vals=ids.map(id=>{
+          const v=raw[`${id}_d_${y}_${m}_${d}`]||0; total+=v; return v;
+        });
+        rows.push([ds,...vals,total].join(","));
+      });
+      downloadBlob(rows.join("\n"), `ai-screen-time_daily_${todayStr()}.csv`, "text/csv");
+    });
+  });
+}
+document.getElementById("export-json").addEventListener("click",exportJSON);
+document.getElementById("export-csv").addEventListener("click",exportCSV);
+
 function renderTracker(){
-  if(!rawData) return;
   const hidden=P.hiddenIds||[];
+  let secOf;
+  if(offset===0){
+    if(!rawData) return;
+    secOf=id=>rawData[id]?.[period]||0;
+  } else {
+    if(!stats) return;
+    const r=currentRange();
+    const sums={};
+    stats.daily.forEach(rec=>{
+      const dt=new Date(rec.y,rec.m-1,rec.d);
+      if(dt<r.from||dt>r.to) return;
+      Object.keys(rec.services||{}).forEach(sid=>{ sums[sid]=(sums[sid]||0)+rec.services[sid]; });
+    });
+    secOf=id=>sums[id]||0;
+  }
+
   const entries=P.chipOrder.filter(id=>!hidden.includes(id)).map(id=>{
-    const s=SERVICES.find(x=>x.id===id); if(!s) return null;
-    return {id,name:s.name,color:s.color,sec:rawData[id]?.[period]||0};
+    const s=svcOf(id); if(!s) return null;
+    return {id,name:s.name,color:s.color,sec:secOf(id)};
   }).filter(Boolean).sort((a,b)=>b.sec-a.sec);
   const total=entries.reduce((s,e)=>s+e.sec,0);
   const maxSec=entries[0]?.sec||1;
 
-  drawDonut(entries,total);
+  // カテゴリ別（ドーナツ外周・凡例で使用）
+  const catTotals={};
+  entries.forEach(e=>{ const c=CAT_OF[e.id]; if(!c) return; catTotals[c.id]=(catTotals[c.id]||0)+e.sec; });
+  const catEntries=CATEGORIES.map(c=>({name:c.name,color:c.color,sec:catTotals[c.id]||0}));
+
+  drawDonut(entries,catEntries,total);
   document.getElementById("donut-total").textContent=fmtShort(total);
+
   const barsEl=document.getElementById("bars"); barsEl.innerHTML="";
-  if(!total){barsEl.innerHTML=`<div class="empty-msg">各サービスを使うと<br>ここに記録されます</div>`;return;}
-  entries.forEach(e=>{
-    if(!e.sec) return;
-    const row=document.createElement("div"); row.className="bar-row";
-    row.innerHTML=`<span class="bar-dot" style="background:${e.color}"></span><span class="bar-name">${e.name}</span><div class="bar-track"><div class="bar-fill" style="background:${e.color}" data-w="${Math.round(e.sec/maxSec*100)}"></div></div><span class="bar-val">${fmtShort(e.sec)}</span>`;
-    barsEl.appendChild(row);
+  if(!total){
+    barsEl.innerHTML=`<div class="empty-msg">${offset===0?"各サービスを使うと<br>ここに記録されます":"この期間の記録はありません"}</div>`;
+  } else {
+    entries.forEach(e=>{
+      if(!e.sec) return;
+      const row=document.createElement("div"); row.className="bar-row";
+      row.innerHTML=`<span class="bar-dot" style="background:${e.color}"></span><span class="bar-name">${e.name}</span><div class="bar-track"><div class="bar-fill" style="background:${e.color}" data-w="${Math.round(e.sec/maxSec*100)}"></div></div><span class="bar-val">${fmtShort(e.sec)}</span>`;
+      barsEl.appendChild(row);
+    });
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      document.querySelectorAll(".bar-fill").forEach(el=>{el.style.width=el.dataset.w+"%";});
+    }));
+  }
+
+  renderLegend(catEntries,total);
+  updatePnav();
+  renderChart();
+}
+
+function renderLegend(catEntries,total){
+  const el=document.getElementById("cat-legend"); el.innerHTML="";
+  catEntries.forEach(c=>{
+    const pct=total?Math.round(c.sec/total*100):0;
+    const d=document.createElement("span"); d.className="leg";
+    d.innerHTML=`<span class="leg-d" style="background:${c.color}"></span>${c.name} <span class="leg-v">${fmtShort(c.sec)}</span>${total?` <span style="opacity:.6">${pct}%</span>`:""}`;
+    el.appendChild(d);
   });
+}
+
+// ── 前期比バッジ ──
+function deltaHtml(cur,prev){
+  if(!prev) return `<span class="delta flat">—</span>`;
+  const pct=Math.round((cur-prev)/prev*100);
+  if(pct===0)  return `<span class="delta flat">±0%</span>`;
+  const cls=pct>0?"up":"down";
+  return `<span class="delta ${cls}">${pct>0?"+":""}${pct}%</span>`;
+}
+
+// ── グラフ本体 ──
+function renderChart(){
+  const colsEl=document.getElementById("cols");
+  const titleEl=document.getElementById("chart-title");
+  const metaEl=document.getElementById("chart-meta");
+  const avgEl=document.getElementById("avg-line");
+  if(!stats){ colsEl.innerHTML=""; return; }
+  if(chartHover) return;   // ホバー中は再描画を保留
+  renderSessionStats();
+
+  const hidden=new Set(P.hiddenIds||[]);
+  const vis=id=>!hidden.has(id);
+  const now=stats.now;
+  const todayDate=new Date(now.y,now.m-1,now.d);
+  const range=currentRange();
+
+  // 日付 → 日別レコードのマップ
+  const dmap={}; stats.daily.forEach(d=>dmap[`${d.y}-${d.m}-${d.d}`]=d);
+  const dayAt=dt=>dmap[dkey(dt)]||null;
+  const pickSvc=rec=>{
+    const out={}; let t=0;
+    if(rec) Object.keys(rec.services||{}).forEach(sid=>{ if(vis(sid)&&rec.services[sid]){out[sid]=rec.services[sid]; t+=rec.services[sid];} });
+    return {services:out,total:t};
+  };
+  const sumRange=(from,to)=>{
+    let t=0;
+    for(let dt=new Date(from);dt<=to;dt=addDays(dt,1)) t+=pickSvc(dayAt(dt)).total;
+    return t;
+  };
+
+  let cols=[], title="", meta="", avgSec=0, showAvg=false, note="";
+
+  if(period==="today"){
+    title="時間帯別";
+    const target=range.from;
+    const isToday=offset===0;
+    const raw = isToday ? (stats.hourly||{}) : (stats.hourlyByDate?.[dkey(target)]||{});
+    let hourlySum=0;
+    for(let h=0;h<24;h++){
+      const hr=raw[String(h)]||{};
+      const services={}; let total=0;
+      Object.keys(hr).forEach(sid=>{ if(vis(sid)&&hr[sid]){services[sid]=hr[sid]; total+=hr[sid];} });
+      hourlySum+=total;
+      cols.push({
+        label:String(h), showLabel:h%3===0, services, total,
+        state: isToday ? (h===now.hour?"now":(h>now.hour?"future":"")) : "",
+        tip:`${String(h).padStart(2,"0")}:00 – ${String(h).padStart(2,"0")}:59`,
+      });
+    }
+    const dayTotal=pickSvc(dayAt(target)).total;
+    const avg7=sumRange(addDays(target,-7),addDays(target,-1))/7;
+    meta=`直近7日平均 ${fmtShort(Math.round(avg7))} ${deltaHtml(dayTotal,avg7)}`;
+    if(!hourlySum&&dayTotal) note=isToday?"時間帯別の記録はこのバージョンから開始されます":"この日の時間帯別データはありません";
+
+  } else if(period==="week"){
+    title="曜日別";
+    const mon=range.fullFrom;
+    const ti=offset===0?(now.dow===0?6:now.dow-1):6;
+    for(let i=0;i<7;i++){
+      const dt=addDays(mon,i);
+      const p=pickSvc(dayAt(dt));
+      cols.push({
+        label:DOW_JA[i], showLabel:true, services:p.services, total:p.total,
+        state: offset===0 ? (i===ti?"now":(i>ti?"future":"")) : "",
+        tip:`${dt.getMonth()+1}/${dt.getDate()}（${DOW_JA[i]}）`,
+      });
+    }
+    const thisSum=sumRange(mon,addDays(mon,ti));
+    const prevMon=addDays(mon,-7);
+    const prevSum=sumRange(prevMon,addDays(prevMon,ti));
+    avgSec=thisSum/(ti+1); showAvg=thisSum>0;
+    meta=`前週比 ${deltaHtml(thisSum,prevSum)}`;
+
+  } else {
+    title="日別";
+    const first=range.fullFrom, last=range.fullTo;
+    const dim=last.getDate();
+    const td=offset===0?now.d:dim;
+    for(let i=1;i<=dim;i++){
+      const dt=new Date(first.getFullYear(),first.getMonth(),i);
+      const p=pickSvc(dayAt(dt));
+      cols.push({
+        label:String(i), showLabel:(i===1||i%5===0)&&i!==dim, services:p.services, total:p.total,
+        state: offset===0 ? (i===now.d?"now":(i>now.d?"future":"")) : "",
+        tip:`${first.getMonth()+1}/${i}（${DOW_JA[dt.getDay()===0?6:dt.getDay()-1]}）`,
+      });
+    }
+    const thisSum=sumRange(first,new Date(first.getFullYear(),first.getMonth(),td));
+    const prevFirst=new Date(first.getFullYear(),first.getMonth()-1,1);
+    const prevLast=new Date(first.getFullYear(),first.getMonth(),0);
+    const prevTd=Math.min(td,prevLast.getDate());
+    const prevSum=sumRange(prevFirst,new Date(prevFirst.getFullYear(),prevFirst.getMonth(),prevTd));
+    avgSec=thisSum/td; showAvg=thisSum>0;
+    meta=`前月比 ${deltaHtml(thisSum,prevSum)}`;
+  }
+
+  titleEl.textContent=title;
+  metaEl.innerHTML=meta;
+
+  const maxSec=Math.max(...cols.map(c=>c.total),1);
+  const grand=cols.reduce((s,c)=>s+c.total,0);
+
+  colsEl.innerHTML="";
+  if(!grand){
+    colsEl.innerHTML=`<div class="chart-empty">${note||"この期間の記録はまだありません"}</div>`;
+    avgEl.classList.remove("on");
+    return;
+  }
+
+  cols.forEach((c,idx)=>{
+    const col=document.createElement("div");
+    col.className="col"+(c.state?" "+c.state:"")+(c.total?"":" empty");
+    const catSecs=CATEGORIES.map(cat=>{
+      let s=0; cat.ids.forEach(id=>{ s+=c.services[id]||0; });
+      return {cat,sec:s};
+    });
+    const segs=catSecs.filter(x=>x.sec>0)
+      .map(x=>`<div class="seg" style="background:${x.cat.color}" data-h="${(x.sec/maxSec*100)}"></div>`).join("");
+    col.innerHTML=`<div class="col-bar">${segs}</div><div class="col-lbl">${c.showLabel?c.label:""}</div>`;
+    col.addEventListener("mouseenter",()=>showTip(col,c));
+    col.addEventListener("mouseleave",hideTip);
+    colsEl.appendChild(col);
+  });
+
   requestAnimationFrame(()=>requestAnimationFrame(()=>{
-    document.querySelectorAll(".bar-fill").forEach(el=>{el.style.width=el.dataset.w+"%";});
+    colsEl.querySelectorAll(".seg").forEach(el=>{ el.style.height=el.dataset.h+"%"; });
   }));
+
+  if(showAvg&&avgSec>0){
+    avgEl.classList.add("on");
+    positionAvgLine(avgSec/maxSec);
+    document.getElementById("avg-label").textContent=`平均 ${fmtShort(Math.round(avgSec))}`;
+  } else {
+    avgEl.classList.remove("on");
+  }
+  lastAvgRatio = (showAvg&&avgSec>0) ? avgSec/maxSec : null;
 }
-function drawDonut(entries,total){
-  const cv=document.getElementById("donut");
 
-  // 描画サイズを強制設定
-  cv.width = 110;
-  cv.height = 110;
+// ── ツールチップ ──
+function showTip(col,data){
+  chartHover=true;
+  const tip=document.getElementById("chart-tip");
+  const rows=Object.keys(data.services)
+    .map(id=>({id,sec:data.services[id]}))
+    .sort((a,b)=>b.sec-a.sec).slice(0,4)
+    .map(r=>{
+      const s=svcOf(r.id); if(!s) return "";
+      return `<div class="tip-r"><span class="tip-d" style="background:${s.color}"></span><span class="tip-n">${s.name}</span><span class="tip-v">${fmtShort(r.sec)}</span></div>`;
+    }).join("");
+  tip.innerHTML=`<div class="tip-t">${data.tip}</div>`
+    + (data.total?rows+`<div class="tip-r tip-total"><span class="tip-n">合計</span><span class="tip-v">${fmtShort(data.total)}</span></div>`
+                 :`<div class="tip-r"><span class="tip-n">記録なし</span></div>`);
+  const plot=document.getElementById("chart-plot");
+  const x=col.offsetLeft+col.offsetWidth/2;
+  const half=Math.max(tip.offsetWidth,110)/2;
+  tip.style.left=Math.round(Math.max(half,Math.min(plot.clientWidth-half,x)))+"px";
+  tip.style.transform="translateX(-50%)";
+  tip.classList.add("on");
+}
+function hideTip(){ chartHover=false; document.getElementById("chart-tip").classList.remove("on"); }
 
-  const ctx=cv.getContext("2d");
-  ctx.setTransform(1,0,0,1,0,0);
-
-  const W2=110,cx=W2/2,cy=W2/2,R=48,ri=33;
-  ctx.clearRect(0,0,W2,W2);
-  if(!total){ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.arc(cx,cy,ri,0,Math.PI*2,true);ctx.fillStyle="rgba(255,255,255,0.05)";ctx.fill();return;}
-  let angle=-Math.PI/2;
-  entries.forEach(e=>{
+// ── ドーナツ（内周=サービス / 外周=カテゴリ） ──
+function drawRing(ctx,cx,cy,R,ri,items,total,gap){
+  if(!total){
+    ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2); ctx.arc(cx,cy,ri,0,Math.PI*2,true);
+    ctx.fillStyle="rgba(255,255,255,0.05)"; ctx.fill(); return;
+  }
+  let a=-Math.PI/2;
+  items.forEach(e=>{
     if(!e.sec) return;
-    const slice=(e.sec/total)*Math.PI*2-.03;
-    ctx.beginPath();ctx.moveTo(cx+R*Math.cos(angle+.015),cy+R*Math.sin(angle+.015));
-    ctx.arc(cx,cy,R,angle+.015,angle+slice+.015);ctx.arc(cx,cy,ri,angle+slice+.015,angle+.015,true);
-    ctx.closePath();ctx.fillStyle=e.color;ctx.fill();angle+=slice+.03;
+    const slice=Math.max((e.sec/total)*Math.PI*2-gap,0.015);
+    ctx.beginPath();
+    ctx.arc(cx,cy,R ,a+gap/2, a+slice+gap/2);
+    ctx.arc(cx,cy,ri,a+slice+gap/2, a+gap/2, true);
+    ctx.closePath(); ctx.fillStyle=e.color; ctx.fill();
+    a+=slice+gap;
   });
 }
+let lastDonut=null;
+function drawDonut(entries,catEntries,total){
+  const cv=document.getElementById("donut");
+  const wrap=document.getElementById("donut-wrap");
+  // 親要素の実寸に合わせる（メディアクエリで縮む場合にも追従）
+  const S=Math.max(48,Math.round(wrap.clientWidth||110));
+  const dpr=Math.min(window.devicePixelRatio||1,3);
+  cv.width=Math.round(S*dpr); cv.height=Math.round(S*dpr);
+  cv.style.width=S+"px"; cv.style.height=S+"px";
+  const ctx=cv.getContext("2d");
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,S,S);
+  const cx=S/2, cy=S/2, k=S/110;               // 110px設計を基準にスケール
+  drawRing(ctx,cx,cy,53*k,49.5*k,catEntries,total,0.05);  // 外周：カテゴリ（細リング）
+  drawRing(ctx,cx,cy,45*k,34*k,entries,   total,0.03);    // 内周：サービス
+  lastDonut={entries,catEntries,total};
+}
+window.addEventListener("resize",()=>{
+  if(lastDonut) drawDonut(lastDonut.entries,lastDonut.catEntries,lastDonut.total);
+});
+
 document.querySelectorAll(".ttab").forEach(btn=>{
-  btn.addEventListener("click",()=>{document.querySelectorAll(".ttab").forEach(b=>b.classList.remove("active"));btn.classList.add("active");period=btn.dataset.p;renderTracker();});
+  btn.addEventListener("click",()=>{
+    document.querySelectorAll(".ttab").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active"); period=btn.dataset.p; offset=0;
+    hideTip(); renderTracker();
+  });
+});
+document.getElementById("pn-prev").addEventListener("click",()=>{
+  if(offset>OFFSET_MIN[period]){ offset--; hideTip(); renderTracker(); }
+});
+document.getElementById("pn-next").addEventListener("click",()=>{
+  if(offset<0){ offset++; hideTip(); renderTracker(); }
 });
 
 // ━━━ 設定パネル ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 function renderSvcSettings(){
   const wrap=document.getElementById("svc-settings"); wrap.innerHTML="";
-  SERVICES.forEach(s=>{
+  P.chipOrder.forEach(id=>{
+    const s=SERVICES.find(x=>x.id===id); if(!s) return;
     const isH=(P.hiddenIds||[]).includes(s.id), isTOff=(P.trackingOff||[]).includes(s.id);
     const row=document.createElement("div"); row.className="svc-row";
     row.innerHTML=`<span class="svc-dot-sm" style="background:${s.color}"></span><span class="svc-name">${s.name}</span><div class="svc-tog-wrap"><label class="svc-tog-label"><span>表示</span><input type="checkbox" data-type="display" data-id="${s.id}" ${isH?"":"checked"}/><span class="stslider"></span></label><label class="svc-tog-label"><span>計測</span><input type="checkbox" data-type="track" data-id="${s.id}" ${isTOff?"":"checked"}/><span class="stslider"></span></label></div>`;
@@ -412,12 +867,14 @@ function renderSortList(){
 
 function applyPrefs(){
   document.documentElement.setAttribute("data-theme",P.theme);
+  document.documentElement.setAttribute("data-layout",P.layoutMode||"scroll");
   applyBg(); applyTextStyles();
 
   // 機能オンオフ
   document.getElementById("search-wrap").style.display = P.showSearch  ?"":"none";
   document.getElementById("ai-nav").style.display      = P.showNav     ?"":"none";
   document.getElementById("tracker").style.display     = P.showTracker ?"":"none";
+  document.getElementById("heatmap-section").style.display = P.showHeatmap ?"":"none";
   document.getElementById("clock").style.display       = P.showClock   ?"":"none";
   document.getElementById("greeting").style.display    = P.showClock   ?"":"none";
   document.getElementById("dateline").style.display    = P.showClock   ?"":"none";
@@ -427,12 +884,17 @@ function applyPrefs(){
 
   // 設定UIに反映
   document.querySelectorAll(".tbtn").forEach(b=>b.classList.toggle("on",b.dataset.theme===P.theme));
+  document.querySelectorAll(".lmbtn").forEach(b=>b.classList.toggle("on",b.dataset.lm===(P.layoutMode||"scroll")));
+  document.getElementById("lm-hint").textContent = (P.layoutMode||"scroll")==="scroll"
+    ? "壁紙を全画面で楽しみ、下にスクロールで記録を見る"
+    : "時計と記録を1画面にまとめて表示する";
   document.querySelectorAll(".bsbtn").forEach(b=>b.classList.toggle("on",b.dataset.bg===P.bgStyle));
   document.querySelectorAll(".ptbtn").forEach(b=>b.classList.toggle("on",b.dataset.pt===P.photoTiming));
   document.getElementById("name-input").value      = P.userName||"";
   document.getElementById("t-search").checked      = P.showSearch;
   document.getElementById("t-nav").checked         = P.showNav;
   document.getElementById("t-tracker").checked     = P.showTracker;
+  document.getElementById("t-heatmap").checked     = P.showHeatmap;
   document.getElementById("t-clock").checked       = P.showClock;
 
   // スライダー
@@ -445,12 +907,13 @@ function applyPrefs(){
   sl("sl-clock-weight", P.clockWeight||200,     "");
   sl("sl-overlay",      P.overlayOpacity||45,   "%");
 
-  renderNav(); renderSvcSettings(); renderSortList(); initEngine(); updateClock();
+  renderNav(); renderSvcSettings(); renderSortList(); initEngine(); updateClock(); updateScrollCue();
 }
 
 // 設定イベント
 document.querySelectorAll(".tbtn").forEach(b=>{b.addEventListener("click",()=>{P.theme=b.dataset.theme;savePrefs();applyPrefs();});});
 document.querySelectorAll(".bsbtn").forEach(b=>{b.addEventListener("click",()=>{P.bgStyle=b.dataset.bg;savePrefs();applyPrefs();});});
+document.querySelectorAll(".lmbtn").forEach(b=>{b.addEventListener("click",()=>{P.layoutMode=b.dataset.lm;savePrefs();applyPrefs();});});
 document.querySelectorAll(".ptbtn").forEach(b=>{b.addEventListener("click",()=>{P.photoTiming=b.dataset.pt;savePrefs();applyPrefs();});});
 document.getElementById("refresh-photo").addEventListener("click",refreshPhoto);
 document.getElementById("name-input").addEventListener("input",e=>{P.userName=e.target.value;savePrefs();updateClock();});
@@ -473,13 +936,28 @@ document.getElementById("name-input").addEventListener("input",e=>{P.userName=e.
   });
 });
 
-[["t-search","showSearch"],["t-nav","showNav"],["t-tracker","showTracker"],["t-clock","showClock"]].forEach(([id,key])=>{
+[["t-search","showSearch"],["t-nav","showNav"],["t-tracker","showTracker"],["t-heatmap","showHeatmap"],["t-clock","showClock"]].forEach(([id,key])=>{
   document.getElementById(id).addEventListener("change",e=>{P[key]=e.target.checked;savePrefs();applyPrefs();});
 });
 
 document.getElementById("settings-btn").addEventListener("click",()=>{
   document.getElementById("sp").classList.add("open");
   document.getElementById("sp-overlay").classList.add("open");
+});
+
+// スクロールキュー：下に見るものが無ければ隠す／スクロールしたら消す
+function updateScrollCue(){
+  const page=document.getElementById("page");
+  const hasMore = (P.showTracker || P.showHeatmap) && (P.layoutMode||"scroll")==="scroll";
+  document.getElementById("scroll-cue").style.display = hasMore ? "" : "none";
+  page.classList.toggle("scrolled", page.scrollTop > 24);
+}
+document.getElementById("page").addEventListener("scroll",()=>{
+  updateScrollCue();
+  if(engineMenuOpen) closeEngineMenu();
+});
+document.getElementById("scroll-cue").addEventListener("click",()=>{
+  document.getElementById("tracker").scrollIntoView({behavior:"smooth",block:"start"});
 });
 function closeSettings(){
   document.getElementById("sp").classList.remove("open");
@@ -507,6 +985,9 @@ loadPrefs(()=>{
     }, 300);
 
     loadTracker();
+    loadStats();
+    loadYear();
     setInterval(loadTracker,5000);
+    setInterval(loadStats,20000);
   });
 });

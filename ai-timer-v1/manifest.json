@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "AI Screen Time",
-  "version": "5.0",
-  "description": "Momentumライクなホーム画面 + AI・SNS利用時間トラッカー",
-  "permissions": ["storage", "tabs", "alarms"],
+  "version": "6.3",
+  "description": "Momentumライクなホーム画面 + AI・SNS利用時間トラッカー（時間帯別・曜日別・前期比・セッション統計・年間ヒートマップ・アイドル検出・バッジ・エクスポート）",
+  "permissions": ["storage", "tabs", "alarms", "idle"],
   "host_permissions": [
     "https://chatgpt.com/*",
     "https://*.chatgpt.com/*",

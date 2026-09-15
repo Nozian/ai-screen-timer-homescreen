@@ -19,6 +19,14 @@
     .nm{font-size:11px;color:#999;flex:1}
     .tm{font-size:12px;font-weight:700;font-variant-numeric:tabular-nums}
     .sep{height:1px;background:#181818}
+    .catbar{display:flex;height:6px;border-radius:99px;overflow:hidden;background:#161616;gap:1px}
+    .catseg{height:100%}
+    .catleg{display:flex;gap:9px;flex-wrap:wrap}
+    .cl{display:flex;align-items:center;gap:4px;font-size:9px;color:#777}
+    .cld{width:6px;height:6px;border-radius:2px;flex-shrink:0}
+    .dl{display:flex;justify-content:flex-end;font-size:10px;color:#555;gap:5px;align-items:baseline}
+    .dv{font-weight:700;font-variant-numeric:tabular-nums}
+    .dv.up{color:#FF6B6B}.dv.down{color:#32D74B}.dv.flat{color:#666}
     .tot{display:flex;justify-content:space-between;align-items:baseline}
     .tl{font-size:10px;color:#444}
     .tv{font-size:16px;font-weight:800;font-variant-numeric:tabular-nums}
@@ -37,7 +45,10 @@
     </div>
     <div class="list" id="list"></div>
     <div class="sep"></div>
+    <div class="catbar" id="catbar"></div>
+    <div class="catleg" id="catleg"></div>
     <div class="tot"><span class="tl">合計</span><span class="tv" id="tot">--</span></div>
+    <div class="dl" id="dl"></div>
   </div>
   <script src="popup.js"></script>
 </body>
