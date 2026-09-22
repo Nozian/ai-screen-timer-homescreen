@@ -22,3 +22,5 @@ chrome.runtime.sendMessage({type:'GET_PHOTO'}).then(result => PhotoUI.render(doc
 update().catch(()=>{});
 setInterval(()=>update().catch(()=>{}),1000);
 document.getElementById('rest').focus();
+
+PhraseUI.mount(document.getElementById('break-phrase'),document.getElementById('title')).catch(()=>{});

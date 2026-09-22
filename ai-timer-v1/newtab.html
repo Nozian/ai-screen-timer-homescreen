@@ -4,6 +4,7 @@
   <meta charset="UTF-8"/>
   <title>New Tab</title>
   <link rel="stylesheet" href="newtab.css"/>
+  <link rel="stylesheet" href="wellbeing.css"/>
 </head>
 <body>
   <div id="bg-photo"></div>
@@ -44,12 +45,22 @@
         <button id="search-go">→</button>
       </div>
 
+      <section id="home-phrase" aria-label="今日の言葉"></section>
+
       <div id="scroll-cue">
         <span>SCREEN TIME</span>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
       </div>
     </main>
 
+    <section id="focus-tools" aria-label="集中モードと音">
+      <button id="focus-toggle" aria-pressed="false">集中モード</button>
+      <details class="focus-panel"><summary>BGM・環境音</summary>
+        <div class="audio-row"><label for="bgm-preset">BGM</label><select id="bgm-preset"><option value="chords">静かな和音</option><option value="bells">やわらかなベル</option></select><button id="bgm-play">再生</button><label class="audio-volume">音量<input id="bgm-volume" type="range" min="0" max="100" value="35" aria-label="BGMの音量"><output id="bgm-value">35%</output></label></div>
+        <div class="audio-row"><label for="ambient-preset">環境音</label><select id="ambient-preset"><option value="rain">雨の音</option><option value="waves">波の音</option></select><button id="ambient-play">再生</button><label class="audio-volume">音量<input id="ambient-volume" type="range" min="0" max="100" value="35" aria-label="環境音の音量"><output id="ambient-value">35%</output></label></div>
+        <button id="audio-stop">すべて停止</button><p id="focus-status" class="focus-note" role="status">BGMと環境音は、別々にも一緒にも流せます。</p><p class="focus-note">端末内で作る音です。自動再生はしません。このタブを閉じると止まります。</p>
+      </details>
+    </section>
     <section id="tracker">
       <div id="tracker-head">
         <span id="tracker-label">Screen Time</span>
@@ -248,5 +259,9 @@
 
   <script src="photos.js"></script>
   <script src="newtab.js"></script>
+  <script src="phrases.js"></script>
+  <script src="focus-audio.js"></script>
+  <script src="focus.js"></script>
+  <script src="home-phrase.js"></script>
 </body>
 </html>

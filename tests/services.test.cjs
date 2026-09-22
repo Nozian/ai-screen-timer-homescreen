@@ -79,3 +79,28 @@ test('proxy restricts origin and category, hides secret, follows download_locati
     assert.equal(calls.at(-1),'https://api.unsplash.com/photos/test_photo/download?ixid=abc');
   } finally {global.fetch=original;}
 });
+
+test('phrase modes: random avoids repeats, fixed stays fixed, favorites constrain the pool',()=>{
+ const c=context('phrases.js');const m=c.PhraseModel;
+ assert.notEqual(m.choose({},m.defaults[0],()=>0),m.defaults[0]);
+ assert.equal(m.choose({mode:'fixed',fixed:m.defaults[2]}),m.defaults[2]);
+ assert.equal(m.choose({mode:'favorites',favorites:[m.defaults[3]]}),m.defaults[3]);
+ assert.ok(m.defaults.includes(m.choose({mode:'favorites',favorites:[]})));
+ const clean=m.normalize({mode:'bad',custom:[' hello ','hello',null],favorites:['bad','hello'],fixed:'hello'});
+ assert.equal(clean.mode,'random');assert.equal(clean.custom.length,1);assert.equal(clean.favorites[0],'hello');
+ assert.equal(m.choose({...clean,mode:'fixed'}),'hello');
+});
+
+test('independent audio channels, stop during generation, volume bounds and no autoplay',async()=>{
+ const events=[];const makeGain=()=>({gain:{value:0,linearRampToValueAtTime:v=>events.push(['gain',v]),setTargetAtTime:v=>events.push(['volume',v]),cancelScheduledValues:()=>{}},connect(){return this;}});
+ class Audio {constructor(){events.push('context');this.currentTime=0;this.destination={};}async resume(){}createGain(){return makeGain();}createBufferSource(){return {connect(){return this;},start(){events.push('start')},stop(){events.push('stop')},disconnect(){}};}}
+ const c=context('focus-audio.js');const a=new c.FocusAudio(Audio);
+ assert.equal(events.length,0);
+ a.buffer=async()=>({});
+ await a.play('bgm','chords',35);await a.play('ambient','rain',70);
+ assert.ok(a.channels.bgm);assert.ok(a.channels.ambient);a.stop('bgm');assert.equal(a.channels.bgm,undefined);assert.ok(a.channels.ambient);
+ a.volume('ambient',150);assert.deepEqual(events.at(-1),['volume',1]);
+ let resolve; a.buffer=()=>new Promise(r=>{resolve=r});
+ const pending=a.play('bgm','bells',20);await new Promise(setImmediate);a.stop('bgm');resolve({});assert.equal(await pending,false);assert.equal(a.channels.bgm,undefined);
+ a.stopAll();assert.equal(Object.keys(a.channels).length,0);
+});
