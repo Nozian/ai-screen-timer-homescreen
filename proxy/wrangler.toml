@@ -1,0 +1,7 @@
+name = "ai-screen-time-unsplash"
+main = "worker.mjs"
+compatibility_date = "2026-09-22"
+
+[vars]
+# Replace with the extension's actual ID shown in chrome://extensions.
+ALLOWED_ORIGINS = "chrome-extension://REPLACE_WITH_EXTENSION_ID"

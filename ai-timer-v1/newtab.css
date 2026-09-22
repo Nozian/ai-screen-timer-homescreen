@@ -408,3 +408,9 @@ html,body { width:100%; height:100%; overflow:hidden; font-family:-apple-system,
 [data-theme="light"] .ptbtn.on   { color: #0d0f1e; }
 [data-theme="light"] #refresh-photo { color: rgba(0,0,0,0.55); }
 [data-theme="light"] #sp-close   { color: rgba(0,0,0,0.45); }
+
+.integration-input { width:100%; padding:9px; border-radius:8px; border:1px solid var(--sp-inp-b); background:var(--sp-inp); color:var(--text); font:inherit; }
+.integration-note { color:var(--sub); font-size:12px; line-height:1.7; }
+#bg-photo { background-image:url("assets/landscape.svg"); }
+#photo-credit { background:rgba(0,0,0,.55); padding:5px 8px; border-radius:6px; color:#eee; max-width:calc(100vw - 28px); }
+#photo-credit a { color:#fff; }
