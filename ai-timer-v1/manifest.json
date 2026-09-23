@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AI Screen Time",
-  "version": "6.5",
+  "version": "6.6",
   "description": "Momentumライクなホーム画面 + AI・SNS利用時間トラッカー（時間帯別・曜日別・前期比・セッション統計・年間ヒートマップ・アイドル検出・バッジ・エクスポート）",
   "permissions": [
     "storage",

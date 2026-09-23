@@ -160,9 +160,6 @@
 
       <div class="sps" id="photo-options">
         <div class="spl">Unsplash の風景写真</div>
-        <label class="spl-sub" for="photo-endpoint">Unsplash接続先（HTTPS）</label>
-        <input id="photo-endpoint" class="integration-input" type="url" placeholder="https://your-worker.workers.dev/" />
-        <button id="photo-connect" class="integration-input">接続先を保存</button>
         <label class="spl-sub" for="photo-category">写真のテーマ</label>
         <select id="photo-category" class="integration-input"><option value="nature">自然</option><option value="forest">森</option><option value="ocean">海</option><option value="mountains">山</option><option value="autumn">秋</option></select>
         <p id="photo-status" class="integration-note" role="status"></p>
@@ -173,7 +170,7 @@
           <button class="ptbtn" data-pt="manual">手動のみ</button>
         </div>
         <button id="refresh-photo">📷 今すぐ変える</button>
-        <p class="integration-note">「タブを開くたび」はAPIの利用枠を守るため、5分以内は同じ写真を使います。未接続・オフライン時は代替の山の背景を表示します。</p>
+        <p class="integration-note">写真は自動で取得します。「タブを開くたび」は5分以内なら同じ写真を使います。通信できない場合は保存済みの写真または山の背景を表示します。</p>
       </div>
 
       <div class="sps">

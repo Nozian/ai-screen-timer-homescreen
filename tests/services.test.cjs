@@ -33,9 +33,11 @@ test('rest remains blocked for five minutes then resumes with a new usage thresh
   assert.equal(c.breakDecision(prefs,s,3600,now+300000,date).blocked,true);
 });
 function fixture() {return {id:'test_photo',urls:{regular:'https://images.unsplash.com/photo-test?ixid=preserve'},user:{name:'<img onerror=alert(1)>',links:{html:'https://unsplash.com/@tester'}}};}
-test('no endpoint uses local fallback without network',async()=>{
-  const c=context('photo-service.js');
-  assert.equal((await c.getPhoto()).photo,null);
+test('fresh installation uses the bundled endpoint without configuration',async()=>{
+  let requested;
+  const c=context('photo-service.js',{},async url=>{requested=String(url);return {ok:true,json:async()=>fixture()};});
+  assert.equal((await c.getPhoto()).photo.id,'test_photo');
+  assert.equal(requested,'https://ai-screen-time-unsplash.nozomuy1220.workers.dev/photo?category=nature');
 });
 test('photo fetch coalesces, preserves hotlink metadata and credits, caches and tracks once',async()=>{
   const data={__prefs__:{photoEndpoint:'https://example.com/',photoTiming:'newtab'}};
@@ -43,13 +45,14 @@ test('photo fetch coalesces, preserves hotlink metadata and credits, caches and 
   const c=context('photo-service.js',data,async(url,options)=>{calls.push([String(url),options]);return {ok:true,json:async()=>fixture()};});
   const [a,b]=await Promise.all([c.getPhoto(),c.getPhoto()]);
   assert.equal(calls.length,1);assert.equal(a.photo.id,b.photo.id);
+  assert.match(calls[0][0],/^https:\/\/ai-screen-time-unsplash\.nozomuy1220\.workers\.dev\//);
   assert.match(a.photo.url,/ixid=preserve/);assert.match(a.photo.profile,/utm_source=ai_screen_time/);
   await c.getPhoto();assert.equal(calls.length,1);
   await c.trackPhoto(a.photo.id);await c.trackPhoto(a.photo.id);
   assert.equal(calls.length,2);assert.equal(calls[1][1].method,'POST');
 });
 test('offline keeps last photo and backs off',async()=>{
-  const old={endpoint:'https://example.com/',category:'nature',id:'old',cachedAt:1};
+  const old={endpoint:'https://ai-screen-time-unsplash.nozomuy1220.workers.dev/',category:'nature',id:'old',cachedAt:1};
   const data={__prefs__:{photoEndpoint:old.endpoint},__unsplash_photo__:old};let calls=0;
   const c=context('photo-service.js',data,async()=>{calls++;throw Error('offline');});
   assert.equal((await c.getPhoto()).photo.id,'old');await c.getPhoto();assert.equal(calls,1);

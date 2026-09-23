@@ -17,7 +17,7 @@ const DAYS = ["日","月","火","水","木","金","土"];
 
 // ━━━ デフォルト設定 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 const DEFAULTS = {
-  breakEnabled:false, breakMinutes:30, photoCategory:"nature", photoEndpoint:"",
+  breakEnabled:false, breakMinutes:30, photoCategory:"nature",
   theme:"dark", bgStyle:"photo", userName:"",
   showSearch:true, showNav:true, showTracker:true, showClock:true, showHeatmap:true,
   layoutMode:"scroll",    // "scroll"（壁紙優先・下にスクロール） | "compact"（1画面にまとめて表示）
@@ -800,7 +800,6 @@ function applyPrefs(){
   document.getElementById("photo-options").style.display = P.bgStyle==="photo"?"flex":"none";
 
   document.getElementById("photo-category").value = P.photoCategory;
-  document.getElementById("photo-endpoint").value = P.photoEndpoint;
   document.getElementById("break-enabled").checked = P.breakEnabled;
   document.getElementById("break-minutes").value = P.breakMinutes;
 
@@ -906,22 +905,6 @@ loadPrefs(()=>{
   });
 });
 
-document.getElementById('photo-connect').addEventListener('click', async () => {
-  const status = document.getElementById('photo-status');
-  try {
-    const value = document.getElementById('photo-endpoint').value.trim();
-    let endpoint = '';
-    if (value) {
-      const url = new URL(value);
-      if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) throw Error('HTTPSの接続先URLを入力してください。');
-      endpoint = url.href.replace(/\/?$/, '/');
-    }
-    P.photoEndpoint = endpoint;
-    await chrome.storage.local.set({__prefs__:P, __photo_retry__:0});
-    await chrome.storage.local.remove(['__unsplash_photo__','__photo__']);
-    await refreshPhoto();
-  } catch (err) { status.textContent = err.message; }
-});
 document.getElementById('photo-category').addEventListener('change', async e => {
   P.photoCategory = e.target.value;
   await chrome.storage.local.set({__prefs__:P, __photo_retry__:0});

@@ -1,4 +1,4 @@
-# AI Screen Time 6.5
+# AI Screen Time 6.6
 
 既存のホーム画面・利用統計・ウィジェットを保ちながら、Unsplash公式APIの風景写真とAI休憩リマインダーを追加しました。
 
@@ -33,19 +33,25 @@ Chrome 120以降の `chrome://extensions` でデベロッパーモードを有�
 
 言葉とお気に入りは端末内の拡張機能ストレージに保存します。内蔵の言葉は本機能用に作成した短文です。
 
-## Unsplashを接続する（初回設定）
+## Unsplashの風景写真
 
-未設定でも拡張機能と休憩機能は使えます。背景には同梱の山のイラストを表示します。**実際のUnsplash写真には、自分のUnsplash APIアプリと接続サーバーの設定が必要です。このリポジトリにAPIキーや稼働済みサーバーは含まれていません。**
+利用者によるAPIキー登録や接続先入力は不要です。写真のテーマを選ぶだけで、拡張機能に組み込んだ接続先から写真を取得します。写真を取得できない場合は保存済みの写真または同梱の山の背景を表示します。
+
+接続先：`https://ai-screen-time-unsplash.nozomuy1220.workers.dev/`
+
+### 開発者・運営者の設定
+
+以下は配布者が一度だけ行う設定です。一般利用者には要求しません。APIキーはサーバーのシークレットに保管し、拡張機能とGitHubには含めません。
 
 1. [Unsplash Developers](https://unsplash.com/developers) でAPIアプリを登録します。
 2. `proxy/worker.mjs` をCloudflare Workersに配置します。`proxy/wrangler.toml` の `ALLOWED_ORIGINS` を、拡張機能画面に表示されるIDを使った `chrome-extension://拡張機能ID` に置き換えます。複数IDはカンマ区切りです。
 3. Workersのシークレット `UNSPLASH_ACCESS_KEY` にAccess Keyを保存します。Secret Keyは使いません。キーはGitHub・拡張機能・設定画面に記載しないでください。
-4. 配置後のHTTPS URL（例：`https://your-worker.workers.dev/`）をホーム画面の歯車 → **Unsplash接続先**に入力して保存します。
-5. 自然・森・海・山・秋からテーマを選び、「今すぐ変える」で確認します。
+4. 配布する拡張機能IDを `ALLOWED_ORIGINS` に登録します。現在登録しているのは開発者の手元のIDです。Web Store公開時はストアのIDも追加してください。異なるIDで読み込む開発用コピーは、そのままでは写真を取得できません。
+5. ホーム画面で自然・森・海・山・秋からテーマを選び、「今すぐ変える」で確認します。
 
-Wranglerを使う場合は `proxy` ディレクトリで `npx wrangler secret put UNSPLASH_ACCESS_KEY` と `npx wrangler deploy` を実行します。Cloudflareへのログイン・Unsplashアプリ登録は利用者側で行います。公開配布前にはUnsplashの本番申請と利用枠の確認、およびサーバー側のアクセス制限・レート制限を設定してください。CORSのOrigin確認はブラウザ向けの制限であり、サーバーへの認証ではありません。
+Wranglerを使う場合は `proxy` ディレクトリで `npx wrangler secret put UNSPLASH_ACCESS_KEY` と `npx wrangler deploy` を実行します。公開配布前には運営者がUnsplashの本番申請と利用枠の確認、およびサーバー側のアクセス制限・レート制限を設定してください。CORSのOrigin確認はブラウザ向けの制限であり、サーバーへの認証ではありません。
 
-接続先は拡張機能IDを明示的に許可するCORS応答を返します。全HTTPSサイトへのアクセス権限は追加しません。入力した接続先に送るのは写真テーマと写真IDのみで、会話内容や利用統計は送りません。
+接続先は拡張機能IDを明示的に許可するCORS応答を返します。全HTTPSサイトへのアクセス権限は追加しません。接続先に送るのは写真テーマと写真IDのみで、会話内容や利用統計は送りません。
 
 ## 写真の更新・クレジット
 
@@ -54,7 +60,7 @@ Wranglerを使う場合は `proxy` ディレクトリで `npx wrangler secret pu
 - 撮影者プロフィールとUnsplashへ、紹介用UTM付きのリンクを表示します。外部の文字列はHTMLとして挿入しません。
 - 写真を初めて背景として表示できた時点で、サーバーがUnsplashから取得した `links.download_location` を呼びます。同じキャッシュの再表示では重複通知しません。通知失敗時は次回表示時に再試行します。
 - 写真取得・画像読込は10秒でタイムアウトします。API失敗時は保存済み写真を維持し、画像も読めない場合は同梱のイラストに戻ります。API再試行は最低1分空けます。
-- Picsumの旧キャッシュは利用しません。接続先保存時に旧キャッシュを削除します。統計には影響しません。
+- Picsumの旧キャッシュと旧バージョンの手動接続先設定は利用しません。統計には影響しません。
 
 参照：[Unsplash API公式ドキュメント](https://unsplash.com/documentation)、[APIガイドライン](https://help.unsplash.com/en/articles/2511245-unsplash-api-guidelines)、[ChromeアラームAPI](https://developer.chrome.com/docs/extensions/reference/api/alarms)。
 

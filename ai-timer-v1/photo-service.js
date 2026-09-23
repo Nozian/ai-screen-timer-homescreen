@@ -1,5 +1,6 @@
 // Runs only in the service worker. No API keys or arbitrary fetch URLs from content scripts.
 const PHOTO_QUERIES = {nature:'nature landscape', forest:'forest', ocean:'ocean coast', mountains:'mountains', autumn:'autumn landscape'};
+const DEFAULT_PHOTO_ENDPOINT = 'https://ai-screen-time-unsplash.nozomuy1220.workers.dev/';
 let photoRequest = null;
 async function getPhoto(force = false) {
   if (photoRequest) return photoRequest;
@@ -10,10 +11,9 @@ async function loadUnsplashPhoto(force) {
   const r = await chrome.storage.local.get(['__prefs__','__unsplash_photo__','__photo_retry__']);
   const p = r.__prefs__ || {};
   const category = Object.hasOwn(PHOTO_QUERIES, p.photoCategory) ? p.photoCategory : 'nature';
-  const endpoint = p.photoEndpoint || '';
+  const endpoint = DEFAULT_PHOTO_ENDPOINT;
   const cached = r.__unsplash_photo__;
   const old = cached?.endpoint === endpoint && cached?.category === category ? cached : null;
-  if (!endpoint) return {photo:null, status:'Unsplash接続先を設定すると写真を表示できます。'};
   const age = Date.now() - (old?.cachedAt || 0);
   // New-tab requests share a five-minute minimum interval to protect demo quotas.
   const ttl = p.photoTiming === 'manual' ? Infinity : p.photoTiming === 'newtab' ? 300000 : 3600000;
@@ -35,7 +35,7 @@ async function loadUnsplashPhoto(force) {
     const photo = {id:raw.id, url:image.href, author:raw.user.name, profile:profile.href,
       endpoint, category, cachedAt:Date.now(), tracked:false};
     const latest = (await chrome.storage.local.get('__prefs__')).__prefs__ || {};
-    if ((latest.photoEndpoint || '') !== endpoint || (latest.photoCategory || 'nature') !== category) return loadUnsplashPhoto(force);
+    if ((latest.photoCategory || 'nature') !== category) return loadUnsplashPhoto(force);
     await chrome.storage.local.set({__unsplash_photo__:photo, __photo_retry__:0});
     return {photo, status:'Unsplash'};
   } catch (_) {
