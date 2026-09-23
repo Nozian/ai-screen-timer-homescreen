@@ -17,6 +17,7 @@ const DAYS = ["日","月","火","水","木","金","土"];
 
 // ━━━ デフォルト設定 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 const DEFAULTS = {
+  breakEnabled:false, breakMinutes:30, photoCategory:"nature",
   theme:"dark", bgStyle:"photo", userName:"",
   showSearch:true, showNav:true, showTracker:true, showClock:true, showHeatmap:true,
   layoutMode:"scroll",    // "scroll"（壁紙優先・下にスクロール） | "compact"（1画面にまとめて表示）
@@ -86,125 +87,41 @@ function drawBg(){
 }
 drawBg();
 
-// 写真背景：URL直指定方式（fetch不要・Momentumと同方式）
-// MV3拡張ページのCSPはCSS背景画像の外部URLを制限しないため、
-// picsum.photosのURLをそのまま background-image に指定できる。
-// Image()でプリロードして読み込み完了後に表示 → グレー画面なし。
-const CACHE_TTL_HOURLY = 60 * 60 * 1000;
-let photoCache = null;            // { url, credit, cachedAt }
-let photoFetchedThisSession = false;
+// Unsplash photo loading is centralized in the service worker.
+let photoCache = null;
 let photoLoading = false;
-
-function loadPhotoCache(cb) {
-  chrome.storage.local.get("__photo__", r => {
-    photoCache = r.__photo__ || null;
-    // 旧形式（dataUrl）のキャッシュは破棄
-    if (photoCache && !photoCache.url) photoCache = null;
-    cb();
-  });
+function loadPhotoCache(cb) { cb(); }
+function displayPhoto(photo) {
+  return PhotoUI.render(bgPhoto, document.getElementById("photo-credit"), photo);
 }
-function savePhotoCache() { chrome.storage.local.set({ __photo__: photoCache }); }
-
-function genPhotoUrl() {
-  const seed = Math.floor(Math.random() * 100000);
-  return { seed, url: `https://picsum.photos/seed/${seed}/1920/1080` };
-}
-
-// クレジット取得（ベストエフォート：失敗しても写真表示は続行）
-async function fetchCredit(seed) {
-  try {
-    const resp = await fetch(`https://picsum.photos/seed/${seed}/info`);
-    if (!resp.ok) return null;
-    const info = await resp.json();
-    return { author: info.author || "Unknown", sourceUrl: info.url || "https://unsplash.com" };
-  } catch(_) { return null; }
-}
-
-function shouldPrefetchNext() {
-  if (P.photoTiming === "manual") return false;
-  if (P.photoTiming === "newtab") return !photoFetchedThisSession;
-  if (P.photoTiming === "hourly") return !photoCache || (Date.now() - photoCache.cachedAt) > CACHE_TTL_HOURLY;
-  return false;
-}
-
-const FALLBACK_GRAD = "linear-gradient(135deg,#0d1b2a,#1b263b,#0a1628)";
-
-function displayPhoto(cache) {
-  bgPhoto.style.background = "";
-  bgPhoto.style.backgroundImage = `url("${cache.url}")`;
-  showCredit(cache.credit);
-}
-
-// 新しい写真をプリロードしてキャッシュ保存。
-// displayWhenReady=true なら読み込み完了後に表示も行う。
-function prefetchPhoto(displayWhenReady) {
+async function prefetchPhoto(force = false) {
   if (photoLoading) return;
   photoLoading = true;
-  const { seed, url } = genPhotoUrl();
-  const img = new Image();
-  img.onload = async () => {
-    const credit = await fetchCredit(seed);
-    photoCache = { url, credit, cachedAt: Date.now() };
-    savePhotoCache();
-    photoFetchedThisSession = true;
-    photoLoading = false;
-    if (displayWhenReady) displayPhoto(photoCache);
-  };
-  img.onerror = () => {
-    photoLoading = false;
-    console.warn("[AI Screen Time] photo preload failed:", url);
-    if (displayWhenReady && !photoCache?.url) bgPhoto.style.background = FALLBACK_GRAD;
-  };
-  img.src = url;
-}
-
-function applyBg() {
-  const isPhoto = P.bgStyle === "photo";
-  bgPhoto.style.display  = isPhoto ? "block" : "none";
-  bgCanvas.style.display = isPhoto ? "none"  : "block";
-
-  const ov = (P.overlayOpacity||45) / 100;
-  document.getElementById("bg-overlay").style.background = `rgba(0,0,0,${ov})`;
-
-  if (!isPhoto) { document.getElementById("photo-credit").style.display="none"; return; }
-
-  if (photoCache?.url) {
-    // ① キャッシュ即表示（ブラウザのHTTPキャッシュで瞬時に出る）
-    displayPhoto(photoCache);
-    // ② 必要なら裏で次の写真をプリロード（表示は差し替えない）
-    if (shouldPrefetchNext()) prefetchPhoto(false);
-  } else {
-    // 初回のみ：読み込み完了次第表示
-    bgPhoto.style.backgroundImage = "none";
-    bgPhoto.style.background = FALLBACK_GRAD;
-    prefetchPhoto(true);
+  const btn = document.getElementById("refresh-photo");
+  btn.disabled = true; btn.textContent = "📷 取得中...";
+  try {
+    const result = await chrome.runtime.sendMessage({type:"GET_PHOTO", force});
+    photoCache = result?.photo || null;
+    document.getElementById("photo-status").textContent = result?.status || "写真を取得できませんでした。";
+    if (P.bgStyle === "photo") await displayPhoto(photoCache);
+  } catch (_) {
+    if (P.bgStyle === "photo") await displayPhoto(null);
+  } finally {
+    photoLoading = false; btn.disabled = false; btn.textContent = "📷 今すぐ変える";
+    if (P.bgStyle !== "photo") document.getElementById("photo-credit").style.display = "none";
   }
 }
-
-function refreshPhoto(){
-  // 強制的に新しい写真を取得して即表示
-  const btn = document.getElementById("refresh-photo");
-  btn.textContent = "📷 取得中...";
-  photoLoading = false; // 強制リセット
-  const { seed, url } = genPhotoUrl();
-  const img = new Image();
-  img.onload = async () => {
-    const credit = await fetchCredit(seed);
-    photoCache = { url, credit, cachedAt: Date.now() };
-    savePhotoCache();
-    displayPhoto(photoCache);
-    btn.textContent = "📷 今すぐ変える";
-  };
-  img.onerror = () => { btn.textContent = "📷 今すぐ変える（失敗・再試行可）"; };
-  img.src = url;
+function applyBg() {
+  const isPhoto = P.bgStyle === "photo";
+  bgPhoto.style.display = isPhoto ? "block" : "none";
+  bgCanvas.style.display = isPhoto ? "none" : "block";
+  document.getElementById("bg-overlay").style.background = `rgba(0,0,0,${(P.overlayOpacity ?? 45)/100})`;
+  if (!isPhoto) { document.getElementById("photo-credit").style.display = "none"; return; }
+  bgPhoto.style.backgroundImage ||= `url("${PhotoUI.fallback}")`;
+  prefetchPhoto();
 }
-
-function showCredit(credit){
-  const el=document.getElementById("photo-credit");
-  if(!credit?.author){el.style.display="none";return;}
-  el.style.display="block";
-  el.innerHTML=`Photo by <a href="${credit.sourceUrl}" target="_blank" rel="noopener">${credit.author}</a> / <a href="https://unsplash.com" target="_blank" rel="noopener">Unsplash</a> (via Picsum)`;
-}
+function refreshPhoto() { return prefetchPhoto(true); }
+setInterval(() => { if (P.bgStyle === "photo" && P.photoTiming === "hourly") prefetchPhoto(); }, 60000);
 
 // ━━━ 時刻・挨拶 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 function greet(h,name){
@@ -882,6 +799,10 @@ function applyPrefs(){
   // 写真オプション表示
   document.getElementById("photo-options").style.display = P.bgStyle==="photo"?"flex":"none";
 
+  document.getElementById("photo-category").value = P.photoCategory;
+  document.getElementById("break-enabled").checked = P.breakEnabled;
+  document.getElementById("break-minutes").value = P.breakMinutes;
+
   // 設定UIに反映
   document.querySelectorAll(".tbtn").forEach(b=>b.classList.toggle("on",b.dataset.theme===P.theme));
   document.querySelectorAll(".lmbtn").forEach(b=>b.classList.toggle("on",b.dataset.lm===(P.layoutMode||"scroll")));
@@ -976,18 +897,23 @@ loadPrefs(()=>{
 
     applyPrefs();
 
-    setTimeout(() => {
-      const bg = document.getElementById("bg-photo");
-      if (P.bgStyle === "photo" && photoCache?.url &&
-          (!bg.style.backgroundImage || bg.style.backgroundImage === "")) {
-        displayPhoto(photoCache);
-      }
-    }, 300);
-
     loadTracker();
     loadStats();
     loadYear();
     setInterval(loadTracker,5000);
     setInterval(loadStats,20000);
   });
+});
+
+document.getElementById('photo-category').addEventListener('change', async e => {
+  P.photoCategory = e.target.value;
+  await chrome.storage.local.set({__prefs__:P, __photo_retry__:0});
+  refreshPhoto();
+});
+document.getElementById('break-enabled').addEventListener('change', e => {
+  P.breakEnabled = e.target.checked; savePrefs();
+});
+document.getElementById('break-minutes').addEventListener('change', e => {
+  P.breakMinutes = Math.max(1,Math.min(480,Math.round(Number(e.target.value)||30)));
+  e.target.value = P.breakMinutes; savePrefs();
 });

@@ -1,3 +1,4 @@
+importScripts("photo-service.js", "break-service.js");
 // background.js  v5
 
 const SERVICES = [
@@ -12,7 +13,8 @@ const SERVICES = [
   { id:"youtube",    name:"YouTube",    color:"#ff0000", url:"https://www.youtube.com",              domains:["youtube.com","www.youtube.com"],urlFilter:null,      urlExclude:null      },
 ];
 
-const TICK = 5;
+// Chrome 120+ production extensions schedule alarms no faster than every 30 seconds.
+const TICK = 30;
 let focused = true;
 
 // ── アイドル検出 ────────────────────────────────────────
@@ -77,6 +79,7 @@ async function isTrackingDisabled(sid) {
 
 async function addSec(sid, sec) {
   if (await isTrackingDisabled(sid)) return;
+  if (AI_IDS.includes(sid) && (await getBreakStatus()).blocked) return;
   const now = new Date();
   const nowMs = now.getTime();
   const dk=dayKey(sid), wk=weekKey(sid), mk=monthKey(sid);
@@ -271,4 +274,17 @@ chrome.runtime.onMessage.addListener((msg,_,res)=>{
     chrome.tabs.create({url:chrome.runtime.getURL("newtab.html")});
     return true;
   }
+});
+
+// Only extension pages can fetch photos or control the break timer.
+chrome.runtime.onMessage.addListener((msg, sender, respond) => {
+  const ownPage = ["newtab.html", "break.html"].some(path => sender.url === chrome.runtime.getURL(path));
+  let task;
+  if (msg.type === 'GET_PHOTO' && ownPage) task = getPhoto(msg.force === true);
+  if (msg.type === 'PHOTO_USED' && ownPage) task = trackPhoto(msg.id).then(()=>({ok:true}));
+  if (msg.type === 'GET_BREAK_STATUS') task = getBreakStatus();
+  if (msg.type === 'BREAK_ACTION' && ownPage && ['rest','snooze','disable'].includes(msg.action)) task = performBreakAction(msg.action);
+  if (!task) return;
+  task.then(respond).catch(()=>respond({error:'処理を完了できませんでした。'}));
+  return true;
 });

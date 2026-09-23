@@ -1,0 +1,31 @@
+.phrase-widget { text-align:center; width:min(540px,100%); margin:18px auto 0; color:var(--text,#fff); font:13px/1.65 system-ui,sans-serif; }
+.phrase-text { font-size:16px; margin:0 0 7px; overflow-wrap:anywhere; }
+.phrase-controls { display:flex; flex-wrap:wrap; justify-content:center; gap:6px; }
+.phrase-widget button,.focus-panel button,#focus-toggle { color:inherit; background:rgba(60,65,80,.55); border:1px solid #ffffff35; border-radius:9px; padding:7px 11px; cursor:pointer; font:inherit; }
+.phrase-widget button[aria-pressed="true"] { color:#ffe1a0; }
+.phrase-widget button:disabled { opacity:.45; cursor:default; }
+.phrase-widget summary { cursor:pointer; font-size:11px; padding:8px; }
+.phrase-settings { padding:16px; border-radius:12px; background:var(--sp-bg,#192631); border:1px solid #ffffff25; text-align:left; display:grid; gap:10px; }
+.phrase-settings label { display:grid; gap:4px; }
+.phrase-settings input,.phrase-settings select,.focus-panel select { width:100%; min-width:0; color:inherit; background:var(--sp-inp,#223440); border:1px solid #ffffff40; border-radius:7px; padding:8px; font:inherit; }
+.phrase-hint { font-size:11px; opacity:.8; margin:0; }
+.focus-panel { width:min(500px,100%); color:var(--text,#fff); font:12px/1.6 system-ui,sans-serif; background:rgba(15,24,35,.8); border:1px solid #ffffff25; border-radius:14px; padding:12px 16px; }
+.focus-panel summary { cursor:pointer; text-align:center; }
+.audio-row { display:grid; grid-template-columns:48px minmax(0,1fr) 55px; gap:8px; align-items:center; margin:14px 0; }
+.audio-volume { grid-column:2/4; display:flex; align-items:center; gap:8px; white-space:nowrap; }
+.audio-volume input { min-width:0; width:0; flex:1; }
+.audio-volume output { min-width:3em; }
+.focus-note { font-size:11px; color:#d2d8df; margin:8px 0; }
+#focus-tools { position:relative; z-index:2; display:flex; flex-direction:column; align-items:center; gap:12px; padding:0 24px 28px; }
+body.focus-mode #ai-nav,body.focus-mode #search-wrap,body.focus-mode #tracker,body.focus-mode #heatmap-section,body.focus-mode #scroll-cue { display:none!important; }
+body.focus-mode #hero { min-height:65vh; }
+#hero .phrase-widget { padding:0 16px; }
+#hero .phrase-settings { max-height:250px; overflow:auto; }
+#hero:has(details[open]) { padding-bottom:45px; }
+.phrase-widget button:focus-visible,.focus-panel button:focus-visible,#focus-toggle:focus-visible { outline:2px solid #c8dcff; outline-offset:3px; }
+body.break-page .phrase-widget { margin:6px auto; }
+body.break-page #title { overflow-wrap:anywhere; max-width:100%; }
+@media(max-width:480px) { .phrase-controls button { font-size:11px; } }
+
+.focus-panel { color:#f0f0f0; }
+.focus-panel select { background:#223440; }
